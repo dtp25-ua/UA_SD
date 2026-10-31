@@ -5,7 +5,7 @@ import java.util.List;
 public class WM_Central {
 
 	/**
-	 * @param args puerto_servidor kafka_host kafka_puerto
+	 * @param args puerto_servidor kafka_host kafka_puerto ruta_bd timeout_ms
 	 */
 	@SuppressWarnings("resource")
 	public static void main(String[] args) {
@@ -18,9 +18,9 @@ public class WM_Central {
 
 		try
 		{
-			if (args.length < 3) {
-				System.out.println("Debe indicar el puerto de escucha, la IP de Kafka y el puerto de Kafka");
-				System.out.println("$./WM_Central puerto_servidor kafka_host kafka_puerto");
+			if (args.length < 5) {
+				System.out.println("Debe indicar el puerto, IP y puerto de Kafka, ruta de la BD y timeout(ms)");
+				System.out.println("$./WM_Central puerto_servidor kafka_host kafka_puerto ruta_bd timeout_ms");
 				System.exit (1);
 			}
 
@@ -28,9 +28,11 @@ public class WM_Central {
 			puerto = args[0];
 			kafkaHost = args[1];
 			kafkaPuerto = args[2];
+			String rutaBD = args[3];
+			int timeout = Integer.parseInt(args[4]);
 			
-			// inicializamos la base de datos, si el fichero no existe se crea
-			GestorBD gestorBD = new GestorBD("watermanagement.db");
+			// inicializamos la base de datos
+			GestorBD gestorBD = new GestorBD(rutaBD);
 			gestorBD.inicializar();
 
 			// estado en memoria de todas las estaciones compartido entre hilos
@@ -60,7 +62,7 @@ public class WM_Central {
 		        System.out.println("Sirviendo cliente...");
 
 				// pasamos gestorBD y gestorEstaciones al hilo para que pueda consultar/actualizar el estado
-		        Thread t = new HiloServidor(skCliente, gestorBD, gestorEstaciones);
+		        Thread t = new HiloServidor(skCliente, gestorBD, gestorEstaciones, timeout);
 		        t.start();
 			}
 		}

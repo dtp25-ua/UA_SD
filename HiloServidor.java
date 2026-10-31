@@ -1,5 +1,6 @@
 import java.lang.Exception;
 import java.net.Socket;
+import java.net.SocketTimeoutException;
 import java.sql.SQLException;
 import java.io.*;
 
@@ -42,10 +43,11 @@ public class HiloServidor extends Thread {
 		salida.flush();
 	}
 
+	// metodo auxiliar para obtener el nombre de la estacion asociada a este hilo
 	private String nombre()
 	{
 		// if - else
-		return (idEstacion != null) ? "HiloServidor" : "cliente sin registrar";
+		return (idEstacion != null) ? idEstacion : "cliente sin registrar";
 	}
 
 	// comprueba si la estacion asociada a este hilo es la misma que la pasada como parametro
@@ -54,36 +56,51 @@ public class HiloServidor extends Thread {
 		return idEstacion != null && idEstacion.equals(p_id);
 	}
 
+	// metodo para cambiar el estado de la estacion en BD y en memoria
+	private String cambiarEstado(String p_id, String p_nuevoEstado)
+	{
+		if (!estacionValida(p_id))
+		{
+			return "STATUS#ERROR#Estacion no registrada en esta conexion";
+		}
+
+		try
+		{
+			// actualizamos el estado en la BD
+			gestorBD.updateEstado(p_id, p_nuevoEstado);
+
+			// actualizamos el estado en memoria, para que el panel de control lo muestre
+			EstacionInfo est =gestorEstaciones.getEstacion(p_id);
+			if (est != null)
+			{
+				est.setEstado(p_nuevoEstado);
+			}
+			System.out.println("SRV: Estacion " + p_id + " cambio de estado a " + p_nuevoEstado);
+			return "STATUS#OK#Estado actualizado correctamente";
+		}
+		catch (SQLException e)
+		{
+			System.out.println("Error en la BD al cambiar estado: " + e.toString());
+			return "STATUS#ERROR#No se pudo actualizar el estado de la estacion";
+		}
+	}
+
+	// decide que hacer segun el tipo de trama recibida  y devuelve la respuesta
 	private String procesarTrama(String p_Cadena)
 	{
 		// separamos por # la trama
 		String[] campos = p_Cadena.split("#");
 		String tipo = campos[0];
 		
-		// comprobamos que el formato es el adecuado
 		if(campos.length == 3 && tipo.equals("REGISTRO"))
 		{
+			// registramos la estacion en la BD y en memoria
 			return procesarRegistro(campos[1], campos[2]);
-
-			try
-			{
-				gestorBD.upsertEstacion((idEstacion), ubicacion, EstacionInfo.DISPONIBLE);
-
-				// actualizamos tambien el estado en memoria, para que el panel de control lo muestre
-				gestorEstaciones.registrarOActualizar(idEstacion, ubicacion, EstacionInfo.DISPONIBLE);
-
-				respuesta = "STATUS#OK#Estacion registrada correctamente";
-			}
-			catch (SQLException e){
-
-				// si falla la insercion a la BD se lo comunicamos al cliente como error
-				System.out.println("Error en la BD al registrar estacion: " + e.toString());
-				respuesta = "STATUS#ERROR#No se pudo registrar la estacion";
-			}
 		} 
 		else if (campos.length == 3 && tipo.equals("HEARTBEAT"))
 		{
-			if (!estacionValida(campos[1]))
+			// el latido no cambia el estado, sirve como aviso de que la estacion sigue viva
+			if (estacionValida(campos[1]))
 			{
 				return "STATUS#OK#Latido recibido";
 			}
@@ -92,14 +109,24 @@ public class HiloServidor extends Thread {
 				return "STATUS#ERROR#Estacion no registrada en esta conexion";
 			}
 		}
-		else if (campos.length == 3 && tipo.equals("HEARTBEAT"))
+		else if (campos.length == 3 && tipo.equals("AVERIA"))
+		{
+			// por implementar cuando haya riegos: si estaba regando, finalizarlo
+			return cambiarEstado(campos[1], EstacionInfo.FUGA);
+		}
+		else if (campos.length == 2 && tipo.equals("AVERIA_RESUELTA"))
+		{
+			return cambiarEstado(campos[1], EstacionInfo.DISPONIBLE);
+		}
+		return "STATUS#ERROR#Trama no válida";
 	}
 
-	// procesa la trama de registro recibida del cliente
+	// metodo para registrar una estacion en la BD y en memoria
 	private String procesarRegistro(String p_id, String p_ubicacion)
 	{
 		try
 		{
+			// registramos la estacion en la BD
 			gestorBD.upsertEstacion((p_id), p_ubicacion, EstacionInfo.DISPONIBLE);
 
 			// actualizamos tambien el estado en memoria, para que el panel de control lo muestre
@@ -117,26 +144,70 @@ public class HiloServidor extends Thread {
 		}
 	}
 	
-	
-    public void run() {
-		String Cadena="";
-		
-        try {
+	// se ejecuta siempre cuando termina la conexion
+	private void MarcarDesconectada()
+	{
+		if (idEstacion != null)
+		{
+			EstacionInfo estacion = gestorEstaciones.getEstacion(idEstacion);
+			if (estacion != null)
+				// actualizamos el estado en memoria 
+				estacion.setEstado(EstacionInfo.DESCONECTADA);
+			try
+			{
+				// actualizamos el estado en la BD
+				gestorBD.updateEstado(idEstacion, EstacionInfo.DESCONECTADA);				
+			}
+			catch (SQLException e)
+			{
+				System.out.println("Error en la BD al marcar estacion como desconectada: " + e.toString());
+			}
+
+			// si no ha habido ningun error
+			System.out.println("SRV: Estacion " + idEstacion + " desconectada");
+		}
+	}
+
+	// metodo principal del hilo, se ejecuta al iniciar el hilo
+    public void run() 
+	{
+        try 
+		{	
+			skCliente.setSoTimeout(timeout);
+			entrada = new DataInputStream(skCliente.getInputStream());
+			salida = new DataOutputStream(skCliente.getOutputStream());
 			
-			Cadena = this.leeSocket (skCliente, Cadena);
-			/*
-			* Se escribe en pantalla la informacion que se ha recibido del
-			* cliente
-			*/
-			String respuesta = this.procesarRegistro(Cadena);
-			this.escribeSocket (skCliente, respuesta);						
-			
-			skCliente.close();
-			//System.exit(0); No se debe poner esta sentencia, porque en ese caso el primer cliente que cierra rompe el socket 
-			//				  y desconecta a todos				
+			// bucle infinito para atender al cliente mientras no haya error de conexion
+			for(;;)
+			{
+				// por cada trama recibida del cliente enviamos una respuesta
+				String trama = leeSocket();
+				String respuesta = procesarTrama(trama);
+				escribeSocket(respuesta);
+			}
         }
-        catch (Exception e) {
+        catch (SocketTimeoutException e) {
+          System.out.println("SRV: sin mensajes de vida de " + nombre());
+        }
+		catch (EOFException e) {
+          System.out.println("SRV: " + nombre() + " ha cerrado la conexion");
+        }
+		catch (IOException e) {
+          System.out.println("SRV: error de comunicación con " + nombre() + ": " + e.toString());
+        }
+		catch (Exception e) {
           System.out.println("Error: " + e.toString());
         }
+		finally 
+		{
+			MarcarDesconectada();
+			try{
+				skCliente.close();
+			}
+			catch (IOException e)
+			{
+				System.out.println("Error al cerrar el socket: " + e.toString());
+			}
+		}
     }
 }

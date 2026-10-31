@@ -1,6 +1,7 @@
 import java.io.*;
 import java.net.*;
 
+// clase que implementa el cliente que se conecta al servidor WM_Central para registrar una estacion
 public class WM_WS_M {
 
 	/*
