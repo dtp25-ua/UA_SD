@@ -128,7 +128,10 @@ public class WM_WS_E {
     {
         // si no hay riego en curso, no hacemos nada
         if (!regando)
+        {
+            System.out.println("[WS] Error: No hay riego en curso");
             return;
+        }
 
         regando = false;
         hiloRiego.interrupt();
