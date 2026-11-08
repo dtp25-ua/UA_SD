@@ -17,7 +17,7 @@ public class GestorBD {
     }
 
     // abre la conexion a la bd y crea las tablas si no existen
-    public void inicializar() throws SQLException {
+    public synchronized void inicializar() throws SQLException {
         conexion = DriverManager.getConnection("jdbc:sqlite:" + rutaBD);
         crearTablas();
     }
@@ -59,7 +59,7 @@ public class GestorBD {
     }
 
     // inserta una estación si no existe, o actualiza ubicacion/estado si ya existe
-    public void upsertEstacion(String p_id, String p_ubicacion, String p_estado) throws SQLException
+    public synchronized void upsertEstacion(String p_id, String p_ubicacion, String p_estado) throws SQLException
     {
         String sql = "INSERT INTO estaciones (id_estacion, ubicacion, estado) VALUES (?, ?, ?) " +
                      "ON CONFLICT(id_estacion) DO UPDATE SET ubicacion = excluded.ubicacion, estado = excluded.estado;";
@@ -73,7 +73,7 @@ public class GestorBD {
     }
 
     // actualiza el estado de una estación con un id dado
-    public void updateEstado(String p_id, String p_estado) throws SQLException
+    public synchronized void updateEstado(String p_id, String p_estado) throws SQLException
     {
         String sql = "UPDATE estaciones SET estado = ? WHERE id_estacion = ?;";
 
@@ -85,7 +85,7 @@ public class GestorBD {
     }
 
     // carga todas las estaciones de la BD y devuelve una lista de estaciones
-    public List<EstacionInfo> cargarEstaciones() throws SQLException
+    public synchronized List<EstacionInfo> cargarEstaciones() throws SQLException
     {
         List<EstacionInfo> lista = new ArrayList<EstacionInfo>();
         String sql = "SELECT id_estacion, ubicacion, estado FROM estaciones";
@@ -107,7 +107,7 @@ public class GestorBD {
     }
 
     // registra el resumen de un riego ya terminado en la BD
-    public void insertarRiego(String p_idEstacion, String p_idOperario,  double p_volumenTotal, int p_duracion, String p_motivoFin) throws SQLException
+    public synchronized void insertarRiego(String p_idEstacion, String p_idOperario,  double p_volumenTotal, int p_duracion, String p_motivoFin) throws SQLException
     {
         String sql = "INSERT INTO riegos (id_estacion, id_operario, fin, volumen_total_l, duracion_s, motivo_fin)" + 
         "VALUES (?, ?, CURRENT_TIMESTAMP, ?, ?, ?);";
@@ -123,7 +123,7 @@ public class GestorBD {
     }
 
     // metodo para cerrar la conexion a la BD
-    public void cerrar()
+    public synchronized void cerrar()
     {
         try {
             if (conexion != null && !conexion.isClosed()) {

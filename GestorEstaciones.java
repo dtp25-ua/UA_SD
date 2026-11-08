@@ -16,7 +16,7 @@ public class GestorEstaciones {
 
     // usamos 'synchronized' para que solo un hilo pueda utilizar el método a la vez
     // si uno lo está usando y otro lo llama, este queda en espera
-    public synchronized void registrarOActualizar(String p_id, String p_ubicacion, String p_estadoInicial)
+    public synchronized EstacionInfo registrarOActualizar(String p_id, String p_ubicacion, String p_estadoInicial)
     {
         // buscamos el id de la estacion a registrar/actualizar en la lista
         EstacionInfo estacion = estaciones.get(p_id);
@@ -33,6 +33,8 @@ public class GestorEstaciones {
             estacion.setUbicacion(p_ubicacion);
             estacion.setEstado(p_estadoInicial);
         }
+
+        return estacion;
     }
 
     public EstacionInfo getEstacion(String p_id) { return estaciones.get(p_id); }

@@ -127,10 +127,14 @@ public class HiloServidor extends Thread {
 		try
 		{
 			// registramos la estacion en la BD
-			gestorBD.upsertEstacion((p_id), p_ubicacion, EstacionInfo.DISPONIBLE);
+			gestorBD.upsertEstacion(p_id, p_ubicacion, EstacionInfo.DISPONIBLE);
 
 			// actualizamos tambien el estado en memoria, para que el panel de control lo muestre
-			gestorEstaciones.registrarOActualizar(p_id, p_ubicacion, EstacionInfo.DISPONIBLE);
+			EstacionInfo est = gestorEstaciones.registrarOActualizar(p_id, p_ubicacion, EstacionInfo.DISPONIBLE);
+
+			// asociamos la conexion a la estacion
+			est.setConexionActual(this);
+			
 			idEstacion = p_id; // guardamos la estacion asociada a este hilo para poder actualizar su estado cuando se desconecte
 			System.out.println("Estacion " + p_id + " registrada desde: " + p_ubicacion);
 
@@ -151,8 +155,14 @@ public class HiloServidor extends Thread {
 		{
 			EstacionInfo estacion = gestorEstaciones.getEstacion(idEstacion);
 			if (estacion != null)
+			{ 
+				// comprobamos tambien que es la conexion actual de la estacion 
+				if (estacion.getConexionActual() != this)
+					return;
+				
 				// actualizamos el estado en memoria 
 				estacion.setEstado(EstacionInfo.DESCONECTADA);
+			}
 			try
 			{
 				// actualizamos el estado en la BD

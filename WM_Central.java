@@ -50,6 +50,13 @@ public class WM_Central {
 		    System.out.println("Escucho el puerto " + puerto);
 			System.out.println("Kafka configurado en " + kafkaHost + ":" + kafkaPuerto);
 
+			String infoCentral = "puerto " + puerto + " | Kafka " + kafkaHost + ":" + kafkaPuerto;
+
+			// nuevo hilo para ejecutar el menu de Central
+			Thread hiloMenu = new Thread(new MenuCentral(gestorEstaciones, infoCentral));
+			hiloMenu.setDaemon(true);
+			hiloMenu.start();
+
 			/*
 			* Mantenemos la comunicacion con el cliente
 			*/	

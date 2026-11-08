@@ -46,7 +46,7 @@ public class WM_WS_M {
 		}
 	}
 
-	// envia una trama al Engine y espera la respuesta, si hay error la excepcion sube a run()
+	// envia una trama al Engine y espera la respuesta, si hay error la excepcion sube a quien lo llame
 	private String enviarYRecibir(DataInputStream p_entrada, DataOutputStream p_salida, String p_trama) throws IOException
 	{
 		p_salida.writeUTF(p_trama);
