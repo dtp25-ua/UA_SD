@@ -7,22 +7,17 @@ import java.util.List;
 public class MenuCentral implements Runnable {
 
     private GestorEstaciones gestor;
+    private GestorRiegos riegos;
     private String info;
     private BufferedReader br;
 
-    public MenuCentral(GestorEstaciones p_gestor, String p_info)
+    public MenuCentral(GestorEstaciones p_gestor, GestorRiegos p_riegos, String p_info)
 	{
 		this.gestor = p_gestor;
+        this.riegos = p_riegos;
 		this.info = p_info;
 		this.br = new BufferedReader(new InputStreamReader(System.in));
 	} 
-
-    // punto unico por el que salen las ordenes hacia las WS.
-	// por implementar: sustituir por un productor Kafka cuando se integre.
-	private void publicarOrden(String p_trama)
-	{
-		System.out.println("[Kafka pendiente] " + p_trama);
-	}
 
     // para determinar las estaciones a regar
     private List<EstacionInfo> elegirDestino() throws IOException 
@@ -83,16 +78,7 @@ public class MenuCentral implements Runnable {
         // recorremos la lista de estaciones que tienen el id dado
         for (EstacionInfo e : destino)
 		{
-			// Central valida que la WS este disponible antes de dar la orden
-			if (!e.estaDisponible())
-			{
-				System.out.println(e.getIdEstacion() + ": no disponible (" + e.getEstadoVisible()
-					+ "), riego no iniciado");
-				continue;  // para pasar a la siguiente estacion sin terminar el bucle
-			}
-            // a falta de kafka
-			publicarOrden("ORDEN_REGAR#" + e.getIdEstacion() + "#CENTRAL#" + duracion);
-			System.out.println(e.getIdEstacion() + ": orden de riego enviada");
+			riegos.procesarSolicitud("CENTRAL", e.getIdEstacion(), duracion);
 		}
     }
 
@@ -102,7 +88,7 @@ public class MenuCentral implements Runnable {
 		for (EstacionInfo e : elegirDestino())
 		{
 			e.setBloqueada(p_bloquear);
-			publicarOrden((p_bloquear ? "ORDEN_BLOQUEAR#" : "ORDEN_ACTIVAR#") + e.getIdEstacion());
+			riegos.enviarOrden(e.getIdEstacion(), (p_bloquear ? "ORDEN_BLOQUEAR#" : "ORDEN_ACTIVAR#") + e.getIdEstacion());
 			System.out.println(e.getIdEstacion() + (p_bloquear ? ": fuera de servicio" : ": activada"));
 		}
 	}

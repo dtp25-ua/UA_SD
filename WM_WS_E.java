@@ -6,6 +6,7 @@ import java.net.Socket;
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.util.UUID;
 
 public class WM_WS_E {
 
@@ -18,6 +19,7 @@ public class WM_WS_E {
     private String monitorHost;
     private int monitorPuerto;
     private double caudalMin;
+    private MensajeriaKafka kafka;
 
     // estado leido y escrito desde distintos hilos, por eso se declaran como volatile
     private volatile boolean averia = false; 
@@ -36,8 +38,7 @@ public class WM_WS_E {
 
     public WM_WS_E(String p_kafkaHost, String p_kafkaPuerto, String p_monitorHost, int p_monitorPuerto, double p_caudal)
     {
-        this.kafkaHost = p_kafkaHost;
-        this.kafkaPuerto = p_kafkaPuerto;
+        this.kafka = new MensajeriaKafka (p_kafkaHost, p_kafkaPuerto);
         this.monitorHost = p_monitorHost;
         this.monitorPuerto = p_monitorPuerto;
         this.caudalMin = p_caudal;
@@ -54,13 +55,16 @@ public class WM_WS_E {
     // por implementar: sustituir por productor Kafka 
     private void publicarEvento(String p_trama)
     {
-        System.out.println("[Kafka pendiente] " + p_trama);
+        kafka.publicarAsync(MensajeriaKafka.TOPIC_EVENTOS_WS, idEstacion, p_trama);
     }
 
     // para que una estacion comience un riego
     // devuelve null si se inicia / el motivo del fallo si lo hay
     public synchronized String iniciarRiego(String p_idOperario, int p_duracionMax)
     {
+        // para no publicar con clave vacía
+        if (idEstacion == null) return "WS sin ID asignado todavia por el Monitor";
+
         // posibles errores al iniciar un riego
         if (!monitorConectado) return "WS averiada: sin conexión con el Monitor";
         if (averia) return "WS averiada";
@@ -128,10 +132,7 @@ public class WM_WS_E {
     {
         // si no hay riego en curso, no hacemos nada
         if (!regando)
-        {
-            System.out.println("[WS] Error: No hay riego en curso");
             return;
-        }
 
         regando = false;
         hiloRiego.interrupt();
@@ -292,6 +293,43 @@ public class WM_WS_E {
         }
     }
 
+    // ordenes de Central: el topic es compartido, asi que solo atendemos las dirigidas a esta WS
+    private void alRecibirOrden(String p_clave, String p_valor)
+    {
+        if (idEstacion == null || p_clave == null || !p_clave.equals(idEstacion))
+            return;
+
+        String[] c = p_valor.split("#");
+        switch (c[0])
+        {
+            case "ORDEN_REGAR":
+                // ORDEN_REGAR#id_ws#id_operario#duracion_s
+                if (c.length == 4)
+                {
+                    System.out.println("[WS] Orden de Central: regar para " + c[2] + " durante " + c[3] + " s");
+                    String motivo = iniciarRiego(c[2], Integer.parseInt(c[3]));
+
+                    // si motivo no es null es que ha habido algun fallo, mostramos el motivo
+                    if (motivo != null)
+                    {
+                        System.out.println("[WS] Riego rechazado: " + motivo);
+                        publicarEvento("RIEGO_RECHAZADO#" + idEstacion + "#" + c[2] + "#" + motivo);
+                    }
+                }
+                break;
+            case "ORDEN_BLOQUEAR":
+                System.out.println("[WS] Orden de Central: bloquear");
+                bloquear();
+                break;
+            case "ORDEN_ACTIVAR":
+                System.out.println("[WS] Orden de Central: activar");
+                activar();
+                break;
+            default:
+                System.out.println("[WS] Orden desconocida de Central: " + p_valor);
+        }
+    }
+
     // menu principal de la WS, para que el usuario pueda iniciar y finalizar riegos manualmente
     private void menu(String idEstacion)
     {
@@ -336,6 +374,8 @@ public class WM_WS_E {
                         }
                         break;
                     case "2":
+                        if(!regando)
+                            System.out.println("[WS] Error: No hay riego en curso");
                         finalizarRiego("MANUAL");
                         break;
                     case "3":
@@ -364,6 +404,11 @@ public class WM_WS_E {
     {
         System.out.println("WM_WS_E Arrancado. Kafka configurado en " + kafkaHost + ":" + kafkaPuerto
             + "(pendiente de integrar). Caudal simulado: " + formato(caudalMin) + " L/min.");
+
+        kafka.iniciarProductor();
+        // grupo nuevo en cada arranque y "latest": una orden antigua no puede arrancar un riego al volver
+        kafka.suscribir(MensajeriaKafka.TOPIC_ORDENES, "wm-ws-" + UUID.randomUUID(), "latest", false,
+            (k, v) -> alRecibirOrden(k, v));    // k: id de la ws, v: trama recibida
         
         // lanzamos un hilo para atender al monitor
         Thread hiloMonitor = new Thread(() -> atenderMonitor());

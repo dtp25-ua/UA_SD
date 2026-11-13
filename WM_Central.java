@@ -46,6 +46,9 @@ public class WM_Central {
 			}
 			System.out.println("Cargadas " + estacionesPrevias.size() + " estaciones desde BD (estado inicial: DESCONECTADA)");
 
+			GestorRiegos gestorRiegos = new GestorRiegos(kafkaHost, kafkaPuerto, gestorBD, gestorEstaciones);
+			gestorRiegos.iniciar();
+
 			ServerSocket skServidor = new ServerSocket(Integer.parseInt(puerto));
 		    System.out.println("Escucho el puerto " + puerto);
 			System.out.println("Kafka configurado en " + kafkaHost + ":" + kafkaPuerto);
@@ -53,7 +56,7 @@ public class WM_Central {
 			String infoCentral = "puerto " + puerto + " | Kafka " + kafkaHost + ":" + kafkaPuerto;
 
 			// nuevo hilo para ejecutar el menu de Central
-			Thread hiloMenu = new Thread(new MenuCentral(gestorEstaciones, infoCentral));
+			Thread hiloMenu = new Thread(new MenuCentral(gestorEstaciones, gestorRiegos, infoCentral));
 			hiloMenu.setDaemon(true);
 			hiloMenu.start();
 

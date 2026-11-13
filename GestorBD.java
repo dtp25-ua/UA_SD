@@ -133,4 +133,15 @@ public class GestorBD {
             System.out.println("Error al cerrar la BD: " + e.toString());
         }
     }
+
+    // anota al operario la primera vez que aparece
+	public synchronized void registrarOperario(String p_id) throws SQLException
+	{
+		String sql = "INSERT OR IGNORE INTO operarios (id_operario) VALUES (?)";
+		try (PreparedStatement ps = conexion.prepareStatement(sql))
+		{
+			ps.setString(1, p_id);
+			ps.executeUpdate();
+		}
+	}
 }

@@ -12,6 +12,13 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 
 // clase para manejar toda la comunicacion con Kafka
 public class MensajeriaKafka {
+	
+	// constantes con los topics
+	public static final String TOPIC_SOLICITUDES = "wm-solicitudes";
+	public static final String TOPIC_OPERARIOS   = "wm-operarios";
+	public static final String TOPIC_ESTADO_WS   = "wm-estado-ws";
+	public static final String TOPIC_ORDENES     = "wm-ordenes";
+	public static final String TOPIC_EVENTOS_WS  = "wm-eventos-ws";
 
     // direccion del servidor Kafka
     private String bootstrap;
@@ -31,6 +38,23 @@ public class MensajeriaKafka {
 		p.put("acks", "all");            // el broker confirma cuando el mensaje esta guardado
 		p.put("max.block.ms", "5000");   // sin broker, falla a los 5 s en vez de esperar un minuto
 		productor = new KafkaProducer<String, String>(p);
+	}
+
+	// publica sin esperar la confirmacion, no bloquea al llamador.
+	public void publicarAsync(String p_topic, String p_clave, String p_valor)
+	{
+		try
+		{
+			// comprueba inmediatamente si se produjo un error
+			productor.send(new ProducerRecord<String, String>(p_topic, p_clave, p_valor), (metadatos, error) -> {
+				if (error != null)
+					System.out.println("[KAFKA] No se pudo publicar en " + p_topic + ": " + error.toString());
+			});
+		}
+		catch (Exception e)
+		{
+			System.out.println("[KAFKA] No se pudo publicar en " + p_topic + ": " + e.toString());
+		}
 	}
 
     // publica y espera la confirmacion del broker, devuelve true si se ha entregado.
