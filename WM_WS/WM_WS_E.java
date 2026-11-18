@@ -39,6 +39,8 @@ public class WM_WS_E {
     public WM_WS_E(String p_kafkaHost, String p_kafkaPuerto, String p_monitorHost, int p_monitorPuerto, double p_caudal)
     {
         this.kafka = new MensajeriaKafka (p_kafkaHost, p_kafkaPuerto);
+        this.kafkaHost = p_kafkaHost;
+        this.kafkaPuerto = p_kafkaPuerto;
         this.monitorHost = p_monitorHost;
         this.monitorPuerto = p_monitorPuerto;
         this.caudalMin = p_caudal;
@@ -403,7 +405,7 @@ public class WM_WS_E {
     public void arrancar()
     {
         System.out.println("WM_WS_E Arrancado. Kafka configurado en " + kafkaHost + ":" + kafkaPuerto
-            + "(pendiente de integrar). Caudal simulado: " + formato(caudalMin) + " L/min.");
+            + ". Caudal simulado: " + formato(caudalMin) + " L/min.");
 
         kafka.iniciarProductor();
         // grupo nuevo en cada arranque y "latest": una orden antigua no puede arrancar un riego al volver
